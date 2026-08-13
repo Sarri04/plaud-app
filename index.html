@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Riunioni">
+<title>Ploud Personale</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#1a1d24; --card2:#22262f; --accent:#ff5c5c;
+    --accent2:#4c8dff; --text:#f2f3f5; --sub:#9aa0ac; --ok:#3ecf8e; --border:#2b2f3a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
+    height:100%; overscroll-behavior:none;}
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh;}
+  header{padding:env(safe-area-inset-top,20px) 20px 14px; text-align:center; border-bottom:1px solid var(--border);}
+  header h1{font-size:18px; margin:0; font-weight:600; letter-spacing:.3px;}
+  main{flex:1; overflow-y:auto; padding:20px; padding-bottom:100px;}
+  nav.tabbar{position:fixed; bottom:0; left:0; right:0; display:flex; background:rgba(20,22,28,.95);
+    backdrop-filter:blur(10px); border-top:1px solid var(--border);
+    padding-bottom:env(safe-area-inset-bottom,10px);}
+  nav.tabbar button{flex:1; background:none; border:none; color:var(--sub); font-size:11px; padding:10px 0 8px;
+    display:flex; flex-direction:column; align-items:center; gap:4px;}
+  nav.tabbar button.active{color:var(--accent2);}
+  nav.tabbar .icon{font-size:20px;}
+  .screen{display:none;} .screen.active{display:block;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:14px;}
+  .record-zone{display:flex; flex-direction:column; align-items:center; padding:40px 0 20px;}
+  #timer{font-size:44px; font-variant-numeric:tabular-nums; font-weight:300; margin-bottom:30px; color:var(--text);}
+  #recBtn{width:88px; height:88px; border-radius:50%; border:4px solid var(--accent); background:var(--accent);
+    position:relative;}
+  #recBtn::after{content:''; position:absolute; inset:0; margin:auto; width:30px; height:30px; border-radius:8px; background:var(--bg);}
+  #recBtn.recording{background:transparent;}
+  #recBtn.recording::after{border-radius:50%; background:var(--accent);}
+  #status{color:var(--sub); font-size:13px; margin-top:16px; text-align:center;}
+  input[type=text],input[type=password],input[type=number],select,textarea{
+    width:100%; background:var(--card2); border:1px solid var(--border); color:var(--text);
+    padding:12px 14px; border-radius:10px; font-size:15px; margin-top:6px;}
+  label{font-size:13px; color:var(--sub); display:block; margin-top:16px;}
+  label:first-child{margin-top:0;}
+  .btn{display:block; width:100%; text-align:center; padding:14px; border-radius:12px; border:none;
+    font-size:15px; font-weight:600; margin-top:14px; background:var(--accent2); color:#fff;}
+  .btn.secondary{background:var(--card2); color:var(--text); border:1px solid var(--border);}
+  .btn.danger{background:#3a1f22; color:#ff8080;}
+  h2{font-size:16px; margin:0 0 10px;}
+  h3{font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--sub); margin:18px 0 8px;}
+  .utt{margin-bottom:12px; padding:10px 12px; background:var(--card2); border-radius:10px;}
+  .utt .who{font-size:12px; font-weight:700; color:var(--accent2); margin-bottom:3px;}
+  .utt .txt{font-size:14.5px; line-height:1.4;}
+  .hist-item{padding:14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;}
+  .hist-item .meta{font-size:12px; color:var(--sub); margin-top:3px;}
+  .empty{text-align:center; color:var(--sub); padding:60px 20px; font-size:14px;}
+  .spinner{width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--accent2);
+    border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 16px;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hint{font-size:12px; color:var(--sub); margin-top:6px; line-height:1.4;}
+  .pill{display:inline-block; font-size:11px; padding:3px 9px; border-radius:20px; background:var(--card2); color:var(--sub); margin-left:6px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header><h1 id="pageTitle">Riunioni</h1></header>
+  <main>
+
+    <!-- REGISTRA -->
+    <section class="screen active" id="screen-record">
+      <div class="card record-zone">
+        <div id="timer">00:00</div>
+        <button id="recBtn"></button>
+        <div id="status">Premi per iniziare a registrare</div>
+      </div>
+      <div class="card" id="preRecOptions">
+        <label>Titolo riunione (opzionale)</label>
+        <input type="text" id="meetingTitle" placeholder="Es. Riunione team marketing">
+        <label>Numero persone previste (opzionale, migliora il riconoscimento)</label>
+        <input type="number" id="speakerCount" min="1" max="10" placeholder="Es. 4">
+      </div>
+    </section>
+
+    <!-- ELABORAZIONE -->
+    <section class="screen" id="screen-processing">
+      <div class="card" style="text-align:center; padding:50px 20px;">
+        <div class="spinner"></div>
+        <div id="procStatus">Caricamento audio…</div>
+        <div class="hint">Puoi restare su questa schermata. L'elaborazione avviene sui server di AssemblyAI.</div>
+      </div>
+    </section>
+
+    <!-- REPORT -->
+    <section class="screen" id="screen-report"></section>
+
+    <!-- CRONOLOGIA -->
+    <section class="screen" id="screen-history">
+      <div id="historyList"></div>
+    </section>
+
+    <!-- IMPOSTAZIONI -->
+    <section class="screen" id="screen-settings">
+      <div class="card">
+        <h2>API Key AssemblyAI</h2>
+        <div class="hint">Registrati gratis su assemblyai.com, copia la tua API key e incollala qui. Resta salvata solo su questo telefono.</div>
+        <label>API Key <span class="pill" id="keyStatus">non inserita</span></label>
+        <input type="password" id="apiKey" placeholder="Incolla qui la tua API key">
+        <label>Lingua riunioni</label>
+        <select id="lang">
+          <option value="it">Italiano</option>
+          <option value="en">Inglese</option>
+        </select>
+        <button class="btn" id="saveSettings">Salva e verifica</button>
+        <div class="hint" id="saveMsg"></div>
+      </div>
+      <div class="card">
+        <h2>Come funziona</h2>
+        <div class="hint">
+          1. Premi Registra durante la riunione (tieni il telefono con schermo acceso, non bloccarlo).<br>
+          2. Alla fine premi Stop: l'audio viene inviato ad AssemblyAI per trascrizione + riconoscimento voci.<br>
+          3. Ottieni il resoconto diviso per persona.<br>
+          4. Da "Esporta" puoi salvarlo direttamente nell'app File di Apple.
+        </div>
+      </div>
+      <div class="hint" style="text-align:center; margin-top:10px;">Versione app: v1.15 (senza recap, solo trascrizione)</div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="record"><span class="icon">🎙️</span>Registra</button>
+    <button class="tab" data-tab="history"><span class="icon">📄</span>Cronologia</button>
+    <button class="tab" data-tab="settings"><span class="icon">⚙️</span>Impostazioni</button>
+  </nav>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const tabs = document.querySelectorAll('.tab');
+const screens = { record:'#screen-record', history:'#screen-history', settings:'#screen-settings' };
+let currentTab = 'record';
+
+function showTab(name, opts={}){
+  currentTab = name;
+  tabs.forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const map = {record:'#screen-record', history:'#screen-history', settings:'#screen-settings', processing:'#screen-processing', report:'#screen-report'};
+  $(map[name]).classList.add('active');
+  if(name==='history') renderHistory();
+}
+tabs.forEach(t=>t.addEventListener('click', ()=> showTab(t.dataset.tab)));
+
+// ---------- Storage ----------
+const store = {
+  get(k, d){ try{ return JSON.parse(localStorage.getItem(k)) ?? d; }catch(e){ return d; } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+};
+$('#apiKey').value = store.get('apiKey','');
+$('#lang').value = store.get('lang','it');
+
+function updateKeyStatus(state){
+  const el = $('#keyStatus');
+  if(state==='empty'){ el.textContent='non inserita'; el.style.color='var(--sub)'; }
+  else if(state==='unverified'){ el.textContent='inserita (non verificata)'; el.style.color='var(--sub)'; }
+  else if(state==='ok'){ el.textContent='valida ✓'; el.style.color='var(--ok)'; }
+  else if(state==='bad'){ el.textContent='non valida ✗'; el.style.color='var(--accent)'; }
+  else if(state==='checking'){ el.textContent='verifica in corso…'; el.style.color='var(--sub)'; }
+}
+updateKeyStatus(store.get('apiKey','') ? 'unverified' : 'empty');
+
+$('#saveSettings').addEventListener('click', async ()=>{
+  const k = $('#apiKey').value.trim();
+  store.set('apiKey', k);
+  store.set('lang', $('#lang').value);
+  if(!k){ updateKeyStatus('empty'); $('#saveMsg').textContent=''; return; }
+  updateKeyStatus('checking');
+  $('#saveMsg').textContent = 'Salvata, verifica in corso…';
+  try{
+    const res = await fetch('https://api.assemblyai.com/v2/transcript?limit=1', { headers:{ authorization:k } });
+    if(res.status===200 || res.status===404){
+      updateKeyStatus('ok');
+      $('#saveMsg').textContent = 'Salvata e valida ✓';
+    } else {
+      const j = await res.json().catch(()=>({}));
+      updateKeyStatus('bad');
+      $('#saveMsg').textContent = 'Salvata, ma il server dice: ' + (j.error || res.status);
+    }
+  }catch(e){
+    updateKeyStatus('bad');
+    $('#saveMsg').textContent = 'Salvata, ma impossibile verificarla ora: ' + e.message;
+  }
+  setTimeout(()=> $('#saveMsg').textContent='', 4000);
+});
+
+// ---------- Recording ----------
+let mediaRecorder, chunks=[], startTime, timerInt, stream;
+const recBtn = $('#recBtn'), timerEl = $('#timer'), statusEl = $('#status');
+
+function fmt(s){ const m=Math.floor(s/60).toString().padStart(2,'0'); const ss=Math.floor(s%60).toString().padStart(2,'0'); return m+':'+ss; }
+
+recBtn.addEventListener('click', async ()=>{
+  if(!mediaRecorder || mediaRecorder.state==='inactive'){
+    if(!store.get('apiKey','')){ alert('Vai su Impostazioni e inserisci prima la tua API key AssemblyAI.'); showTab('settings'); return; }
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    }catch(e){ alert('Permesso microfono negato o non disponibile.'); return; }
+    const mimeCandidates = ['audio/mp4','audio/webm;codecs=opus','audio/webm'];
+    let mime = mimeCandidates.find(m=>MediaRecorder.isTypeSupported(m)) || '';
+    mediaRecorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
+    chunks = [];
+    mediaRecorder.ondataavailable = e=> { if(e.data.size>0) chunks.push(e.data); };
+    mediaRecorder.onstop = onRecordingStop;
+    mediaRecorder.start();
+    startTime = Date.now();
+    timerInt = setInterval(()=> timerEl.textContent = fmt((Date.now()-startTime)/1000), 250);
+    recBtn.classList.add('recording');
+    statusEl.textContent = 'Registrazione in corso… tieni lo schermo acceso';
+    $('#preRecOptions').style.display='none';
+  } else {
+    mediaRecorder.stop();
+    stream.getTracks().forEach(t=>t.stop());
+    clearInterval(timerInt);
+    recBtn.classList.remove('recording');
+  }
+});
+
+async function onRecordingStop(){
+  const blob = new Blob(chunks, {type: mediaRecorder.mimeType || 'audio/mp4'});
+  const title = $('#meetingTitle').value.trim() || 'Riunione ' + new Date().toLocaleDateString('it-IT');
+  const speakerCount = parseInt($('#speakerCount').value) || null;
+  const duration = fmt((Date.now()-startTime)/1000);
+  $('#meetingTitle').value=''; $('#speakerCount').value='';
+  timerEl.textContent='00:00'; statusEl.textContent='Premi per iniziare a registrare';
+  $('#preRecOptions').style.display='block';
+  showTab('processing');
+  try{
+    await processMeeting(blob, title, duration, speakerCount);
+  }catch(err){
+    console.error(err);
+    alert('Errore durante l\'elaborazione: ' + err.message);
+    showTab('record');
+  }
+}
+
+// ---------- AssemblyAI pipeline ----------
+async function processMeeting(blob, title, duration, speakerCount){
+  const key = store.get('apiKey','');
+  const lang = store.get('lang','it');
+  $('#procStatus').textContent = 'Caricamento audio…';
+
+  const uploadRes = await fetch('https://api.assemblyai.com/v2/upload', {
+    method:'POST',
+    headers:{ authorization: key },
+    body: blob
+  });
+  const uploadJson = await uploadRes.json().catch(()=> ({}));
+  if(!uploadRes.ok) throw new Error('Upload fallito ('+uploadRes.status+'): ' + (uploadJson.error || JSON.stringify(uploadJson)));
+  const { upload_url } = uploadJson;
+
+  $('#procStatus').textContent = 'Avvio trascrizione…';
+  const body = {
+    audio_url: upload_url,
+    speaker_labels: true,
+    language_code: lang
+  };
+  if(speakerCount) body.speakers_expected = speakerCount;
+
+  const transRes = await fetch('https://api.assemblyai.com/v2/transcript', {
+    method:'POST',
+    headers:{ authorization: key, 'content-type':'application/json' },
+    body: JSON.stringify(body)
+  });
+  const transJson = await transRes.json().catch(()=> ({}));
+  if(!transRes.ok) throw new Error('Richiesta trascrizione fallita ('+transRes.status+'): ' + (transJson.error || JSON.stringify(transJson)));
+  const { id } = transJson;
+
+  $('#procStatus').textContent = 'Trascrizione e riconoscimento voci in corso…';
+  let result;
+  while(true){
+    await new Promise(r=>setTimeout(r,3000));
+    const poll = await fetch('https://api.assemblyai.com/v2/transcript/'+id, { headers:{ authorization:key } });
+    result = await poll.json();
+    if(result.status==='completed') break;
+    if(result.status==='error') throw new Error(result.error || 'Errore trascrizione');
+    $('#procStatus').textContent = 'Elaborazione in corso… (' + result.status + ')';
+  }
+
+  // Map speaker letters -> "Persona N"
+  const speakerMap = {};
+  let count=0;
+  (result.utterances||[]).forEach(u=>{
+    if(!(u.speaker in speakerMap)){ count++; speakerMap[u.speaker] = 'Persona '+count; }
+  });
+
+  const meeting = {
+    id: Date.now().toString(),
+    title, duration,
+    date: new Date().toISOString(),
+    summary: '',
+    utterances: (result.utterances||[]).map(u=>({ who: speakerMap[u.speaker], text: u.text }))
+  };
+
+  saveMeetingWithSpace(meeting);
+  renderReport(meeting);
+  showTab('report');
+}
+
+function saveMeetingWithSpace(meeting){
+  let all = store.get('meetings', []);
+  all.unshift(meeting);
+  let removed = 0;
+  while(true){
+    try{
+      localStorage.setItem('meetings', JSON.stringify(all));
+      break;
+    }catch(e){
+      // Memoria piena: elimina la riunione più vecchia (non quella appena creata) e riprova
+      if(all.length <= 1) throw new Error('Memoria piena e impossibile liberare spazio.');
+      all.pop();
+      removed++;
+    }
+  }
+  if(removed>0){
+    alert('Memoria del telefono quasi piena: ho eliminato ' + removed + ' riunion' + (removed===1?'e':'i') + ' più vecchia/e dalla cronologia per fare spazio a questa. Ricordati di esportare in File le riunioni che vuoi conservare.');
+  }
+}
+
+// ---------- Report rendering ----------
+function buildReportText(m){
+  let out = `${m.title}\n${new Date(m.date).toLocaleString('it-IT')} — Durata ${m.duration}\n\n`;
+  out += `TRASCRIZIONE\n`;
+  m.utterances.forEach(u=> out += `\n${u.who}: ${u.text}\n`);
+  if(m.summary){ out += `\n\nRECAP\n${m.summary}\n`; }
+  return out;
+}
+
+function renderReport(m){
+  const el = $('#screen-report');
+  el.innerHTML = `
+    <div class="card">
+      <h2>${m.title}</h2>
+      <div class="hint">${new Date(m.date).toLocaleString('it-IT')} · Durata ${m.duration}</div>
+    </div>
+    <div class="card">
+      <h3>Trascrizione</h3>
+      ${m.utterances.map(u=>`<div class="utt"><div class="who">${u.who}</div><div class="txt">${escapeHtml(u.text)}</div></div>`).join('')}
+    </div>
+    ${m.summary ? `<div class="card"><h3>Recap</h3><div class="hint" style="white-space:pre-wrap;color:var(--text);font-size:14px;line-height:1.5;">${m.summary}</div></div>` : ''}
+    <button class="btn" id="exportBtn">Esporta in File</button>
+    <button class="btn secondary" id="backBtn">Torna alla registrazione</button>
+  `;
+  $('#exportBtn').addEventListener('click', ()=> exportMeeting(m));
+  $('#backBtn').addEventListener('click', ()=> showTab('record'));
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function exportMeeting(m){
+  const text = '\uFEFF' + buildReportText(m);
+  const filename = m.title.replace(/[^\w\- ]/g,'').trim().replace(/\s+/g,'_') + '.txt';
+  const file = new File([text], filename, {type:'text/plain;charset=utf-8'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file]}); return; }catch(e){}
+  }
+  // fallback: download link
+  const url = URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));
+  const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- History ----------
+function renderHistory(){
+  const list = store.get('meetings', []);
+  const el = $('#historyList');
+  if(list.length===0){ el.innerHTML = '<div class="empty">Nessuna riunione salvata ancora.</div>'; return; }
+  el.innerHTML = '<div class="card" style="padding:0;">' + list.map(m=>`
+    <div class="hist-item" data-id="${m.id}">
+      <div>
+        <div>${m.title}</div>
+        <div class="meta">${new Date(m.date).toLocaleDateString('it-IT')} · ${m.duration}</div>
+      </div>
+      <div>›</div>
+    </div>`).join('') + '</div>';
+  el.querySelectorAll('.hist-item').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      const m = store.get('meetings',[]).find(x=>x.id===item.dataset.id);
+      if(m){ renderReport(m); showTab('report'); }
+    });
+  });
+}
+</script>
+</body>
+</html>
